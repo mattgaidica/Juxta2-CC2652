@@ -91,12 +91,7 @@
 // Task configuration
 #define MR_TASK_PRIORITY                     1
 #ifndef MR_TASK_STACK_SIZE
-#ifdef FREERTOS
-#define MR_TASK_STACK_SIZE                   2048
-#else
 #define MR_TASK_STACK_SIZE                   1024
-#endif
-
 #endif
 
 // Discovery states
@@ -195,15 +190,6 @@ typedef struct
 } mrConnRec_t;
 
 /*********************************************************************
- * GLOBAL VARIABLES
- */
-#ifdef FREERTOS
-mqd_t g_EventsQueueID;
-#endif
-// Display Interface
-//Display_Handle dispHandle = NULL;
-
-/*********************************************************************
  * LOCAL VARIABLES
  */
 
@@ -225,11 +211,7 @@ static ICall_EntityID selfEntity;
 
 // Event globally used to post local events and pend on system and
 // local events.
-#ifdef FREERTOS
-ICall_SyncHandle syncEvent;
-#else
 static ICall_SyncHandle syncEvent;
-#endif
 // Clock instances for internal periodic events.
 static Clock_Struct clkPeriodic;
 // Clock instance for RPA read events.
@@ -240,23 +222,12 @@ mrClockEventData_t periodicUpdateData = { .event = MR_EVT_PERIODIC };
 
 // Memory to pass RPA read event ID to clock handler
 mrClockEventData_t argRpaRead = { .event = MR_EVT_READ_RPA };
-#ifdef FREERTOS
-/*Non blocking queue */
- mqd_t g_POSIX_appMsgQueue;
-
-#else
 // Queue object used for app messages
 static Queue_Struct appMsg;
 static Queue_Handle appMsgQueue;
-#endif
 
 // Task configuration
-#ifdef FREERTOS
-typedef uint32_t * Task_Handle;
-TaskHandle_t mrTask = NULL;
-#else
 Task_Struct mrTask;
-#endif
 
 #ifndef FREERTOS
 #if defined __TI_COMPILER_VERSION__
@@ -350,8 +321,12 @@ static sensbus_t mag_bus = { CS_MAG, SPC, SDIO };
 stmdev_ctx_t dev_ctx_xl;
 stmdev_ctx_t dev_ctx_mg;
 
-GPIO_PinConfig sdioPinConfigs[2] = {GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* OUTPUT */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* INPUT */
+GPIO_PinConfig sdioPinConfigs[2] = { GPIO_CFG_OUTPUT_INTERNAL
+                                             | GPIO_CFG_OUT_STR_MED
+                                             | GPIO_CFG_OUT_LOW, /* OUTPUT */
+                                     GPIO_CFG_INPUT_INTERNAL
+                                             | GPIO_CFG_IN_INT_NONE
+                                             | GPIO_CFG_PULL_NONE_INTERNAL, /* INPUT */
 };
 
 //bool juxtaRadio = false;
@@ -636,36 +611,13 @@ static void multi_role_spin(void)
 
 void multi_role_createTask(void)
 {
-
-#ifdef FREERTOS
-    BaseType_t xReturned;
-
-    /* Create the task, storing the handle. */
-    xReturned = xTaskCreate(
-            multi_role_taskFxn,                     /* Function that implements the task. */
-            "MULTI_ROLE_APP",                       /* Text name for the task. */
-            MR_TASK_STACK_SIZE / sizeof(uint32_t),  /* Stack size in words, not bytes. */
-            ( void * ) NULL,                        /* Parameter passed into the task. */
-            MR_TASK_PRIORITY,                       /* Priority at which the task is created. */
-            &mrTask );                              /* Used to pass out the created task's handle. */
-
-    if(xReturned == errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY)
-    {
-        /* Creation of FreeRTOS task failed */
-        while(1);
-    }
-#else
     Task_Params taskParams;
-
     // Configure task
     Task_Params_init(&taskParams);
     taskParams.stack = mrTaskStack;
     taskParams.stackSize = MR_TASK_STACK_SIZE;
     taskParams.priority = MR_TASK_PRIORITY;
     Task_construct(&mrTask, multi_role_taskFxn, &taskParams, NULL);
-
-#endif
-
 }
 
 /*********************************************************************
@@ -848,11 +800,7 @@ static void multi_role_init(void)
  *
  * @return  None.
  */
-#ifdef FREERTOS
-static void multi_role_taskFxn(void* a0)
-#else
 static void multi_role_taskFxn(UArg a0, UArg a1)
-#endif
 {
     // Initialize application
     multi_role_init();
@@ -866,12 +814,8 @@ static void multi_role_taskFxn(UArg a0, UArg a1)
         // Note that an event associated with a thread is posted when a
         // message is queued to the message receive queue of the thread
 
-#ifdef FREERTOS
-    mq_receive(syncEvent, (char*)&events, sizeof(uint32_t), NULL);
-#else
         events = Event_pend(syncEvent, Event_Id_NONE, MR_ALL_EVENTS,
         ICALL_TIMEOUT_FOREVER); // event_31 + event_30
-#endif
 
         if (events)
         {
@@ -906,25 +850,6 @@ static void multi_role_taskFxn(UArg a0, UArg a1)
             // If RTOS queue is not empty, process app message.
             if (events & MR_QUEUE_EVT)
             {
-#ifdef FREERTOS
-
-          mrEvt_t *pMsg;
-          do {
-              pMsg = (mrEvt_t *)Util_dequeueMsg(g_POSIX_appMsgQueue);
-              if (NULL != pMsg)
-              {
-                  // Process message.
-                  multi_role_processAppMsg(pMsg);
-
-                  // Free the space from the message.
-                  ICall_free(pMsg);
-              }
-              else
-              {
-                  break;
-              }
-          }while(1);
-#else
                 while (!Queue_empty(appMsgQueue))
                 {
                     mrEvt_t *pMsg = (mrEvt_t*) Util_dequeueMsg(appMsgQueue);
@@ -937,7 +862,6 @@ static void multi_role_taskFxn(UArg a0, UArg a1)
                         ICall_free(pMsg);
                     }
                 }
-#endif
             }
         }
     }
@@ -1395,18 +1319,10 @@ static void multi_role_advertInit(void)
     if (addrMode > ADDRMODE_RANDOM)
     {
         multi_role_updateRPA();
-#ifdef FREERTOS
-    // Create one-shot clock for RPA check event.
-    Util_constructClock(&clkRpaRead, (void*)multi_role_clockHandler,
-                        READ_RPA_PERIOD, 0, true,
-                        (void*) &argRpaRead);
-
-#else
         // Create one-shot clock for RPA check event.
         Util_constructClock(&clkRpaRead, multi_role_clockHandler,
         READ_RPA_PERIOD,
                             0, true, (UArg) &argRpaRead);
-#endif
     }
 }
 
@@ -2032,11 +1948,7 @@ static status_t multi_role_enqueueMsg(uint8_t event, void *pData)
         pMsg->pData = pData;
 
         // Enqueue the message.
-#ifdef FREERTOS
-    success = Util_enqueueMsg(g_POSIX_appMsgQueue, syncEvent, (uint8_t *)pMsg);
-#else
         success = Util_enqueueMsg(appMsgQueue, syncEvent, (uint8_t*) pMsg);
-#endif
         return (success) ? SUCCESS : FAILURE;
     }
 
@@ -2124,11 +2036,7 @@ static void multi_role_updateRPA(void)
  *
  * @return  None.
  */
-#ifdef FREERTOS
-static void multi_role_clockHandler(void * arg)
-#else
 static void multi_role_clockHandler(UArg arg)
-#endif
 {
     mrClockEventData_t *pData = (mrClockEventData_t*) arg;
 
@@ -2581,20 +2489,12 @@ static uint8_t multi_role_addConnInfo(uint16_t connHandle, uint8_t *pAddr,
 
                     if (connList[i].pUpdateClock)
                     {
-#ifdef FREERTOS
-              Util_constructClock(connList[i].pUpdateClock,
-                                              (void*)multi_role_clockHandler,
-                                              SEND_PARAM_UPDATE_DELAY, 0, true,
-                                              (void*) connList[i].pParamUpdateEventData);
-
-#else
                         Util_constructClock(
                                 connList[i].pUpdateClock,
                                 multi_role_clockHandler,
                                 SEND_PARAM_UPDATE_DELAY,
                                 0, true,
                                 (UArg) connList[i].pParamUpdateEventData);
-#endif
                     }
                     else
                     {
