@@ -1,0 +1,208 @@
+/**
+ * These arguments were used when this file was generated. They will be automatically applied on subsequent loads
+ * via the GUI or CLI. Run CLI with '--help' for additional information on how to override these arguments.
+ * @cliArgs --device "CC2652R7RGZ" --package "RGZ" --part "Default" --rtos "tirtos7" --product "simplelink_cc13xx_cc26xx_sdk@6.40.00.13"
+ * @versions {"tool":"1.15.0+2826"}
+ */
+
+/**
+ * Import the modules used in this configuration.
+ */
+const ble          = scripting.addModule("/ti/ble5stack/ble");
+const CCFG         = scripting.addModule("/ti/devices/CCFG");
+const rfdesign     = scripting.addModule("/ti/devices/radioconfig/rfdesign");
+const AESCCM       = scripting.addModule("/ti/drivers/AESCCM");
+const AESCCM1      = AESCCM.addInstance();
+const AESCTRDRBG   = scripting.addModule("/ti/drivers/AESCTRDRBG");
+const AESCTRDRBG1  = AESCTRDRBG.addInstance();
+const AESECB       = scripting.addModule("/ti/drivers/AESECB");
+const AESECB1      = AESECB.addInstance();
+const ECDH         = scripting.addModule("/ti/drivers/ECDH");
+const ECDH1        = ECDH.addInstance();
+const GPIO         = scripting.addModule("/ti/drivers/GPIO");
+const GPIO1        = GPIO.addInstance();
+const GPIO2        = GPIO.addInstance();
+const GPIO3        = GPIO.addInstance();
+const GPIO4        = GPIO.addInstance();
+const GPIO5        = GPIO.addInstance();
+const GPIO6        = GPIO.addInstance();
+const GPIO7        = GPIO.addInstance();
+const GPIO8        = GPIO.addInstance();
+const GPIO9        = GPIO.addInstance();
+const NVS          = scripting.addModule("/ti/drivers/NVS");
+const NVS1         = NVS.addInstance();
+const NVS2         = NVS.addInstance();
+const Power        = scripting.addModule("/ti/drivers/Power");
+const RF           = scripting.addModule("/ti/drivers/RF");
+const SPI          = scripting.addModule("/ti/drivers/SPI", {}, false);
+const SPI1         = SPI.addInstance();
+const TRNG         = scripting.addModule("/ti/drivers/TRNG");
+const TRNG1        = TRNG.addInstance();
+const UART2        = scripting.addModule("/ti/drivers/UART2", {}, false);
+const UART21       = UART2.addInstance();
+const Settings     = scripting.addModule("/ti/posix/tirtos/Settings");
+const BIOS         = scripting.addModule("/ti/sysbios/BIOS");
+const GateMutexPri = scripting.addModule("/ti/sysbios/gates/GateMutexPri");
+const HeapCallback = scripting.addModule("/ti/sysbios/heaps/HeapCallback");
+const Event        = scripting.addModule("/ti/sysbios/knl/Event");
+const Idle         = scripting.addModule("/ti/sysbios/knl/Idle", {}, false);
+const Idle2        = Idle.addInstance();
+const Mailbox      = scripting.addModule("/ti/sysbios/knl/Mailbox");
+const Error        = scripting.addModule("/ti/sysbios/runtime/Error");
+const SysCallback  = scripting.addModule("/ti/sysbios/runtime/SysCallback");
+const Timestamp    = scripting.addModule("/ti/sysbios/runtime/Timestamp");
+
+/**
+ * Write custom configuration values to the imported modules.
+ */
+ble.deviceRole                                            = "PERIPHERAL_CFG+CENTRAL_CFG";
+ble.disDevBySerUuid                                       = true;
+ble.numOfAdvSets                                          = 1;
+ble.numOfDefAdvSets                                       = 1;
+ble.deviceName                                            = "Juxta2";
+ble.addressMode                                           = "ADDRMODE_PUBLIC";
+ble.maxConnNum                                            = 1;
+ble.bondMITMProtection                                    = false;
+ble.disableDisplayModule                                  = true;
+ble.advRptFields                                          = ["SCAN_ADVRPT_FLD_ADDRESS","SCAN_ADVRPT_FLD_ADDRTYPE","SCAN_ADVRPT_FLD_RSSI"];
+ble.radioConfig.codeExportConfig.$name                    = "ti_devices_radioconfig_code_export_param0";
+ble.connUpdateParamsPeripheral.$name                      = "ti_ble5stack_general_ble_conn_update_params0";
+ble.connUpdateParamsPeripheral.reqMaxConnInt              = 200;
+ble.connUpdateParamsPeripheral.reqMinConnInt              = 100;
+ble.advSet1.$name                                         = "ti_ble5stack_broadcaster_advertisement_set0";
+ble.advSet1.advParam1.$name                               = "ti_ble5stack_broadcaster_advertisement_params0";
+ble.advSet1.advData1.$name                                = "ti_ble5stack_broadcaster_advertisement_data0";
+ble.advSet1.advData1.GAP_ADTYPE_FLAGS                     = true;
+ble.advSet1.advData1.advertisingFlags                     = ["GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED","GAP_ADTYPE_FLAGS_GENERAL"];
+ble.advSet1.advData1.GAP_ADTYPE_16BIT_MORE                = true;
+ble.advSet1.advData1.numOfUUIDs16More                     = 1;
+ble.advSet1.advData1.UUID016More                          = 0xA2A2;
+ble.advSet1.scanRes1.$name                                = "ti_ble5stack_broadcaster_advertisement_data1";
+ble.advSet1.scanRes1.GAP_ADTYPE_SLAVE_CONN_INTERVAL_RANGE = true;
+ble.advSet1.scanRes1.maxConnInterval                      = 130;
+ble.advSet1.scanRes1.GAP_ADTYPE_POWER_LEVEL               = true;
+ble.connUpdateParamsCentral.$name                         = "ti_ble5stack_general_ble_conn_update_params1";
+
+CCFG.enableBootloader        = true;
+CCFG.dioBootloaderBackdoor   = 13;
+CCFG.levelBootloaderBackdoor = "Active low";
+CCFG.srcClkLF                = "LF RCOSC";
+CCFG.ccfgTemplate.$name      = "ti_devices_CCFG_CCFGCC26XXTemplate0";
+
+AESCCM1.$name = "CONFIG_AESCCM0";
+
+AESCTRDRBG1.$name              = "CONFIG_AESCTRDRBG_0";
+AESCTRDRBG1.aesctrObject.$name = "CONFIG_AESCTR_0";
+
+AESECB1.$name = "CONFIG_AESECB0";
+
+ECDH1.$name = "CONFIG_ECDH0";
+
+GPIO1.$name           = "LED1";
+GPIO1.mode            = "Output";
+GPIO1.outputStrength  = "Low";
+GPIO1.gpioPin.$assign = "DIO_22";
+
+GPIO2.$name           = "LED2";
+GPIO2.mode            = "Output";
+GPIO2.outputStrength  = "Low";
+GPIO2.gpioPin.$assign = "DIO_5";
+
+GPIO3.$name           = "INT_1_XL";
+GPIO3.gpioPin.$assign = "DIO_18";
+
+GPIO4.$name           = "INT_2_XL";
+GPIO4.gpioPin.$assign = "DIO_19";
+
+GPIO5.$name           = "DRDY";
+GPIO5.gpioPin.$assign = "DIO_13";
+
+GPIO6.$name           = "CS_MAG";
+GPIO6.mode            = "Output";
+GPIO6.gpioPin.$assign = "DIO_14";
+
+GPIO7.$name           = "CS_XL";
+GPIO7.mode            = "Output";
+GPIO7.gpioPin.$assign = "DIO_16";
+
+GPIO8.$name           = "SDIO";
+GPIO8.gpioPin.$assign = "DIO_15";
+
+GPIO9.$name           = "SPC";
+GPIO9.mode            = "Output";
+GPIO9.gpioPin.$assign = "DIO_17";
+
+NVS1.$name                    = "CONFIG_NVSINTERNAL";
+NVS1.internalFlash.$name      = "ti_drivers_nvs_NVSCC26XX0";
+NVS1.internalFlash.regionBase = 0x48000;
+NVS1.internalFlash.regionSize = 0x4000;
+
+NVS2.$name                    = "NVS_JUXTA";
+NVS2.internalFlash.$name      = "ti_drivers_nvs_NVSCC26XX1";
+NVS2.internalFlash.regionBase = 0x10000;
+
+SPI1.$name                    = "SPI_MEM";
+SPI1.mode                     = "Four Pin SS Active Low";
+SPI1.spi.$assign              = "SSI0";
+SPI1.spi.sclkPin.$assign      = "DIO_9";
+SPI1.spi.misoPin.$assign      = "DIO_6";
+SPI1.spi.mosiPin.$assign      = "DIO_8";
+SPI1.spi.dmaRxChannel.$assign = "DMA_CH3";
+SPI1.spi.dmaTxChannel.$assign = "DMA_CH4";
+SPI1.spi.ssPin.$assign        = "DIO_7";
+
+TRNG1.$name = "CONFIG_TRNG_0";
+
+UART21.$name              = "CONFIG_UART2";
+UART21.uart.txPin.$assign = "DIO_11";
+UART21.uart.rxPin.$assign = "DIO_12";
+
+BIOS.assertsEnabled = false;
+BIOS.rtsGateType    = "BIOS_GateMutexPri";
+BIOS.heapSize       = 0x00000000;
+BIOS.heapType       = "HeapCallback";
+
+const Hwi           = scripting.addModule("/ti/sysbios/family/arm/m3/Hwi", {}, false);
+Hwi.enableException = false;
+
+HeapCallback.initFxn           = "osalHeapInitFxn";
+HeapCallback.allocInstFxn      = "osalHeapAllocFxn";
+HeapCallback.freeInstFxn       = "osalHeapFreeFxn";
+HeapCallback.getStatsInstFxn   = "osalHeapGetStatsFxn";
+HeapCallback.isBlockingInstFxn = "osalHeapIsBlockingFxn";
+
+const Clock      = scripting.addModule("/ti/sysbios/knl/Clock", {}, false);
+Clock.tickPeriod = 10;
+
+const Timer       = scripting.addModule("/ti/sysbios/family/arm/cc26xx/Timer", {}, false);
+Timer.rtc.$assign = "RTC0";
+
+Idle2.$name   = "powerIdle";
+Idle2.idleFxn = "Power_idleFunc";
+
+const Semaphore            = scripting.addModule("/ti/sysbios/knl/Semaphore", {}, false);
+Semaphore.supportsPriority = false;
+
+const Swi         = scripting.addModule("/ti/sysbios/knl/Swi", {}, false);
+Swi.numPriorities = 6;
+
+const Task             = scripting.addModule("/ti/sysbios/knl/Task", {}, false);
+Task.defaultStackSize  = 512;
+Task.idleTaskStackSize = 768;
+Task.numPriorities     = 6;
+
+Error.policy       = "Error_SPIN";
+Error.printDetails = false;
+
+const System           = scripting.addModule("/ti/sysbios/runtime/System", {}, false);
+System.abortFxn        = "System_abortSpin";
+System.exitFxn         = "System_exitSpin";
+System.extendedFormats = "%f";
+System.supportModule   = "SysCallback";
+
+/**
+ * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
+ * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
+ * re-solve from scratch.
+ */
+UART21.uart.$suggestSolution = "UART0";
