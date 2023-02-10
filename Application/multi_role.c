@@ -7,6 +7,7 @@
 
  Group: WCS, BTS
  Target Device: cc13xx_cc26xx
+ 2d Author: Matt Gaidica
 
  *****************************************************************************/
 
@@ -26,7 +27,6 @@
 #endif
 
 #include <ti/drivers/GPIO.h>
-//#include <ti/drivers/utils/List.h>
 #include <ti/drivers/NVS.h>
 #include <ti/drivers/SPI.h>
 #include <ti/drivers/UART2.h>
@@ -56,27 +56,35 @@
 
 // Application events
 #define MR_EVT_CHAR_CHANGE         1
-#define MR_EVT_KEY_CHANGE          2
-#define MR_EVT_ADV_REPORT          3
-#define MR_EVT_SCAN_ENABLED        4
-#define MR_EVT_SCAN_DISABLED       5
-#define MR_EVT_SVC_DISC            6
-#define MR_EVT_ADV                 7
-#define MR_EVT_PAIRING_STATE       8
-#define MR_EVT_PASSCODE_NEEDED     9
-#define MR_EVT_SEND_PARAM_UPDATE   10
-#define MR_EVT_PERIODIC            11
-#define MR_EVT_READ_RPA            12
-#define MR_EVT_INSUFFICIENT_MEM    13
-#define JUXTA_EVT_LED_TIMEOUT      14
-#define JUXTA_TIME_UPDATED         15
+#define MR_EVT_ADV_REPORT          2
+#define MR_EVT_SCAN_ENABLED        3
+#define MR_EVT_SCAN_DISABLED       4
+#define MR_EVT_SVC_DISC            5
+#define MR_EVT_ADV                 6
+#define MR_EVT_PAIRING_STATE       7
+#define MR_EVT_PASSCODE_NEEDED     8
+#define MR_EVT_SEND_PARAM_UPDATE   9
+#define MR_EVT_READ_RPA            10
+#define MR_EVT_INSUFFICIENT_MEM    11
+#define JUXTA_EVT_LED_TIMEOUT      12
+#define JUXTA_TIME_UPDATED         13
+#define JUXTA_EVT_1HZ              14
+
+// Juxta NVS
+#define JUXTA_LOG_SIZE                  17 // bytes
+#define JUXTA_LOG_OFFSET_HEADER         0 // 2 bytes
+#define JUXTA_LOG_OFFSET_LOGCOUNT       2 // 4 bytes
+#define JUXTA_LOG_OFFSET_SCANADDR       6 // 6 bytes
+#define JUXTA_LOG_OFFSET_RSSI           12 // 1 bytes
+#define JUXTA_LOG_OFFSET_TIME           13 // 4 bytes
+#define JUXTA_CONFIG_SIZE               1 // uint32_t
+#define JUXTA_CONFIG_OFFSET_LOGCOUNT    0
 
 #define JUXTA_LED_TIMEOUT_PERIOD        1 // ms
 #define TIME_SERVICE_UUID               0xEFFE // see iOS > BLEPeripheralApp
-#define JUXTA_CONFIG_SIZE               1 // uint32_t
-#define JUXTA_CONFIG_OFFSET_LOGCOUNT    0
 #define LSM303AGR_BOOT_TIME             5 // ms
 #define SPI_HALF_PERIOD                 1 // us, Fs = 500kHz
+#define JUXTA_1HZ_PERIOD                1000 // ms
 
 // Internal Events for RTOS application
 #define MR_ICALL_EVT                         ICALL_MSG_EVENT_ID // Event_Id_31
@@ -105,9 +113,6 @@ typedef enum
 
 // address string length is an ascii character for each digit +
 #define MR_ADDR_STR_SIZE     15
-
-// How often to perform periodic event (in msec)
-#define MR_PERIODIC_EVT_PERIOD               1000
 
 #define CONNINDEX_INVALID  0xFF
 
@@ -152,6 +157,7 @@ typedef struct
 {
     uint8_t addrType;         // Peer Device's Address Type
     uint8_t addr[B_ADDR_LEN]; // Peer Device Address
+    int8_t rssi;
 } scanRec_t;
 
 // Container to store information from clock expiration using a flexible array
@@ -212,13 +218,9 @@ static ICall_EntityID selfEntity;
 // Event globally used to post local events and pend on system and
 // local events.
 static ICall_SyncHandle syncEvent;
-// Clock instances for internal periodic events.
-static Clock_Struct clkPeriodic;
+
 // Clock instance for RPA read events.
 static Clock_Struct clkRpaRead;
-
-// Memory to pass periodic event to clock handler
-mrClockEventData_t periodicUpdateData = { .event = MR_EVT_PERIODIC };
 
 // Memory to pass RPA read event ID to clock handler
 mrClockEventData_t argRpaRead = { .event = MR_EVT_READ_RPA };
@@ -286,6 +288,8 @@ static uint8_t mrInitPhy = INIT_PHY_1M;
 // JUXTA
 static Clock_Struct clkJuxtaLEDTimeout;
 mrClockEventData_t argJuxtaLEDTimeout = { .event = JUXTA_EVT_LED_TIMEOUT };
+static Clock_Struct clkJuxta1Hz;
+mrClockEventData_t argJuxta1Hz = { .event = JUXTA_EVT_1HZ };
 
 typedef enum
 {
@@ -297,7 +301,7 @@ static uint8_t juxtaMode = JUXTA_MODE_AXY_LOGGER; //JUXTA_MODE_SHELF; // init mo
 NVS_Handle nvsHandle;
 NVS_Attrs regionAttrs;
 static uint32_t logCount = 0;
-//static uint8_t nvsDataBuffer[JUXTA_LOG_SIZE];
+static uint8_t nvsDataBuffer[JUXTA_LOG_SIZE];
 static uint32_t nvsConfigBuffer[JUXTA_CONFIG_SIZE];
 static uint32_t localTime = 0;
 
@@ -358,11 +362,11 @@ static status_t multi_role_enqueueMsg(uint8_t event, void *pData);
 static uint16_t multi_role_getConnIndex(uint16_t connHandle);
 static uint8_t multi_role_addConnInfo(uint16_t connHandle, uint8_t *pAddr,
                                       uint8_t role);
-static void multi_role_performPeriodicTask(void);
 static void multi_role_clockHandler(UArg arg);
 static uint8_t multi_role_clearConnListEntry(uint16_t connHandle);
 #if (DEFAULT_DEV_DISC_BY_SVC_UUID == TRUE)
-static void multi_role_addScanInfo(uint8_t *pAddr, uint8_t addrType);
+static void multi_role_addScanInfo(uint8_t *pAddr, uint8_t addrType,
+                                   int8_t rssi);
 static bool multi_role_findSvcUuid(uint16_t uuid, uint8_t *pData,
                                    uint16_t dataLen);
 #endif // DEFAULT_DEV_DISC_BY_SVC_UUID
@@ -392,8 +396,12 @@ static void blink(uint8_t runOnce);
 static uint32_t rev32(uint32_t bytes);
 static void recallNVS(void);
 static void saveConfigs(void);
-
-//static void platform_init(void);
+static void setXL(void);
+static void setMag(void);
+static void setTemp(void);
+static void juxta1HzTask(void);
+static void dumpLog(void);
+static void modeCallback(uint8_t newMode);
 
 /*********************************************************************
  * EXTERN FUNCTIONS
@@ -417,6 +425,59 @@ static gapBondCBs_t multi_role_BondMgrCBs = { multi_role_passcodeCB, // Passcode
 /*********************************************************************
  * PUBLIC FUNCTIONS
  */
+static void setXL(void)
+{
+    /* Read output only if new value is available */
+    lsm303agr_reg_t reg;
+    lsm303agr_xl_status_get(&dev_ctx_xl, &reg.status_reg_a);
+
+    if (reg.status_reg_a.zyxda)
+    {
+        /* Read accelerometer data */
+        memset(data_raw_acceleration, 0x00, 3 * sizeof(int16_t));
+        lsm303agr_acceleration_raw_get(&dev_ctx_xl, data_raw_acceleration);
+        acceleration_mg[0] = lsm303agr_from_fs_2g_hr_to_mg(
+                data_raw_acceleration[0]);
+        acceleration_mg[1] = lsm303agr_from_fs_2g_hr_to_mg(
+                data_raw_acceleration[1]);
+        acceleration_mg[2] = lsm303agr_from_fs_2g_hr_to_mg(
+                data_raw_acceleration[2]);
+    }
+}
+
+static void setMag(void)
+{
+    /* Read output only if new value is available */
+    lsm303agr_reg_t reg;
+    lsm303agr_mag_status_get(&dev_ctx_mg, &reg.status_reg_m);
+
+    if (reg.status_reg_m.zyxda)
+    {
+        /* Read magnetic field data */
+        memset(data_raw_magnetic, 0x00, 3 * sizeof(int16_t));
+        lsm303agr_magnetic_raw_get(&dev_ctx_mg, data_raw_magnetic);
+        magnetic_mG[0] = lsm303agr_from_lsb_to_mgauss(data_raw_magnetic[0]);
+        magnetic_mG[1] = lsm303agr_from_lsb_to_mgauss(data_raw_magnetic[1]);
+        magnetic_mG[2] = lsm303agr_from_lsb_to_mgauss(data_raw_magnetic[2]);
+    }
+}
+
+static void setTemp(void)
+{
+    /* Read output only if new value is available */
+    lsm303agr_reg_t reg;
+    lsm303agr_temp_data_ready_get(&dev_ctx_xl, &reg.byte);
+
+    if (reg.byte)
+    {
+        /* Read temperature data */
+        memset(&data_raw_temperature, 0x00, sizeof(int16_t));
+        lsm303agr_temperature_raw_get(&dev_ctx_xl, &data_raw_temperature);
+        temperature_degC = lsm303agr_from_lsb_hr_to_celsius(
+                data_raw_temperature);
+    }
+}
+
 static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp,
                              uint16_t len)
 {
@@ -537,6 +598,110 @@ static void blink(uint8_t runOnce)
     }
 }
 
+//static void dumpLog(void)
+//{
+//    UART_init();
+//
+//    uint32_t i, offset;
+//    uint32_t logPos = 0;
+//    uint8_t flushByte = 0x99;
+//
+//    UART_Params uartParams;
+//    UART_Params_init(&uartParams);
+//    uartParams.baudRate = 9600;
+//    uart = UART_open(JUXTA_UART, &uartParams); // UART_close(uart);
+//    nvsHandle = NVS_open(NVS_JUXTA_DATA, NULL);
+//
+//    if (uart != NULL && nvsHandle != NULL)
+//    {
+//        // header, should send address
+//        for (i = 0; i < 10; i++)
+//        {
+//            UART_write(uart, &flushByte, sizeof(uint8_t));
+//            GPIO_toggle(LED_1);
+//        }
+//        UART_write(uart, attDeviceName, sizeof(attDeviceName));
+//        GPIO_toggle(LED_1);
+//
+//        while (logPos < logCount)
+//        {
+//            offset = logPos * JUXTA_LOG_SIZE;
+//            NVS_read(nvsHandle, offset, (void*) nvsDataBuffer,
+//                     sizeof(nvsDataBuffer));
+//            UART_write(uart, nvsDataBuffer, sizeof(nvsDataBuffer));
+//            GPIO_toggle(LED_1);
+//            logPos++;
+//        }
+//
+//        NVS_close(nvsHandle);
+//        UART_close(uart);
+//        GPIO_write(LED_1, 0);
+//    }
+//
+//}
+
+static void logScan(void) // called after MR_EVT_ADV_REPORT -> multi_role_addScanInfo()
+{
+    // see: scanList, numScanRes
+    uint32_t offset, i, k;
+
+    if (numScanRes > 0)
+    {
+        nvsHandle = NVS_open(NVS_JUXTA_DATA, NULL);
+        if (nvsHandle != NULL)
+        {
+            NVS_getAttrs(nvsHandle, &regionAttrs);
+            for (i = 0; i < numScanRes; i++)
+            {
+                toggleLED(LED1); // only on scan
+                offset = logCount * JUXTA_LOG_SIZE;
+                if (offset < regionAttrs.regionSize - JUXTA_LOG_SIZE)
+                {
+                    // erase NVS if log is on start of sector
+                    if (logCount == 0)
+                    {
+                        // erase all at once
+                        for (k = 0;
+                                k
+                                        < regionAttrs.regionSize
+                                                / regionAttrs.sectorSize; k++)
+                        {
+                            NVS_erase(nvsHandle, k * regionAttrs.sectorSize,
+                                      regionAttrs.sectorSize);
+                        }
+                    }
+
+                    // clear buffer
+                    memset(nvsDataBuffer, 0,
+                    JUXTA_LOG_SIZE * sizeof(nvsDataBuffer[0]));
+                    // load buffer
+                    uint8_t uuid[ATT_BT_UUID_SIZE] = {
+                            LO_UINT16(SIMPLEPROFILE_SERV_UUID), HI_UINT16(
+                                    SIMPLEPROFILE_SERV_UUID) };
+
+                    memcpy(nvsDataBuffer + JUXTA_LOG_OFFSET_HEADER, uuid,
+                           sizeof(uint16_t));
+                    memcpy(nvsDataBuffer + JUXTA_LOG_OFFSET_LOGCOUNT, &logCount,
+                           sizeof(logCount));
+                    memcpy(nvsDataBuffer + JUXTA_LOG_OFFSET_SCANADDR,
+                           scanList[i].addr, B_ADDR_LEN);
+                    memcpy(nvsDataBuffer + JUXTA_LOG_OFFSET_RSSI,
+                           &scanList[i].rssi, 1);
+                    memcpy(nvsDataBuffer + JUXTA_LOG_OFFSET_TIME, &localTime,
+                           sizeof(localTime));
+
+                    NVS_write(nvsHandle, offset, (void*) nvsDataBuffer,
+                              sizeof(nvsDataBuffer),
+                              NVS_WRITE_POST_VERIFY);
+                    logCount++;
+                }
+            }
+            NVS_close(nvsHandle);
+            saveConfigs(); // to increment log count
+        }
+    }
+}
+
 static uint32_t rev32(uint32_t bytes)
 {
     uint32_t aux = 0;
@@ -553,7 +718,7 @@ static uint32_t rev32(uint32_t bytes)
 
 static void recallNVS(void)
 {
-    nvsHandle = NVS_open(NVS_JUXTA, NULL);
+    nvsHandle = NVS_open(NVS_JUXTA_CONFIG, NULL);
     if (nvsHandle != NULL)
     {
         NVS_read(nvsHandle, JUXTA_CONFIG_OFFSET_LOGCOUNT, (void*) &logCount,
@@ -564,7 +729,7 @@ static void recallNVS(void)
 
 static void saveConfigs(void)
 {
-    nvsHandle = NVS_open(NVS_JUXTA, NULL);
+    nvsHandle = NVS_open(NVS_JUXTA_CONFIG, NULL);
     if (nvsHandle != NULL)
     {
         NVS_getAttrs(nvsHandle, &regionAttrs);
@@ -580,6 +745,19 @@ static void saveConfigs(void)
         SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR1, SIMPLEPROFILE_CHAR1_LEN,
                                    &logCount_human);
     }
+}
+
+static void juxta1HzTask()
+{
+    GPIO_toggle(LED1);
+    setXL();
+    setMag();
+    setTemp();
+    localTime += 1;
+}
+
+static void modeCallback(uint8_t newMode) {
+
 }
 
 /*********************************************************************
@@ -648,7 +826,6 @@ static void multi_role_init(void)
     recallNVS();
 
     SPI_init();
-
     dev_ctx_xl.write_reg = platform_write;
     dev_ctx_xl.read_reg = platform_read;
     dev_ctx_xl.handle = (void*) &xl_bus;
@@ -660,15 +837,45 @@ static void multi_role_init(void)
     /* Check device ID */
     whoamI = 0;
     lsm303agr_xl_device_id_get(&dev_ctx_xl, &whoamI);
-//    spiHandle = MC3635_init(CONFIG_SPI);
-//    if (spiHandle == NULL)
-//    {
-//        blink(0); // error
-//    }
-//    if (!MC3635_start(spiHandle))
-//    {
-//        blink(0); // error
-//    }
+    if (whoamI != LSM303AGR_ID_XL)
+    {
+        blink(0); // not found
+    }
+    whoamI = 0;
+    lsm303agr_mag_device_id_get(&dev_ctx_mg, &whoamI);
+
+    if (whoamI != LSM303AGR_ID_MG)
+    {
+        blink(0); // not found
+    }
+    /* Restore default configuration for magnetometer */
+    lsm303agr_mag_reset_set(&dev_ctx_mg, PROPERTY_ENABLE);
+    do
+    {
+        lsm303agr_mag_reset_get(&dev_ctx_mg, &rst);
+    }
+    while (rst);
+
+    /* Enable Block Data Update */
+    lsm303agr_xl_block_data_update_set(&dev_ctx_xl, PROPERTY_ENABLE);
+    lsm303agr_mag_block_data_update_set(&dev_ctx_mg, PROPERTY_ENABLE);
+    /* Set Output Data Rate */
+    lsm303agr_xl_data_rate_set(&dev_ctx_xl, LSM303AGR_XL_ODR_1Hz);
+    lsm303agr_mag_data_rate_set(&dev_ctx_mg, LSM303AGR_MG_ODR_10Hz);
+    /* Set accelerometer full scale */
+    lsm303agr_xl_full_scale_set(&dev_ctx_xl, LSM303AGR_2g);
+    /* Set / Reset magnetic sensor mode */
+    lsm303agr_mag_set_rst_mode_set(&dev_ctx_mg,
+                                   LSM303AGR_SENS_OFF_CANC_EVERY_ODR);
+    /* Enable temperature compensation on mag sensor */
+    lsm303agr_mag_offset_temp_comp_set(&dev_ctx_mg, PROPERTY_ENABLE);
+    /* Enable temperature sensor */
+    lsm303agr_temperature_meas_set(&dev_ctx_xl, LSM303AGR_TEMP_ENABLE);
+    /* Set device in continuous mode */
+    lsm303agr_xl_operating_mode_set(&dev_ctx_xl, LSM303AGR_HR_12bit);
+    /* Set magnetometer in continuous mode */
+    lsm303agr_mag_operating_mode_set(&dev_ctx_mg, LSM303AGR_CONTINUOUS_MODE);
+
 //    modeCallback(juxtaMode); // resets sniff for JUXTA_MODE_AXY_LOGGER, stops sniff for others
 
     BLE_LOG_INT_TIME(0, BLE_LOG_MODULE_APP, "APP : ---- init ", MR_TASK_PRIORITY);
@@ -683,10 +890,10 @@ static void multi_role_init(void)
 
     // Create an RTOS queue for message from profile to be sent to app.
     appMsgQueue = Util_constructQueue(&appMsg);
-    // Create one-shot clock for internal periodic events.
-    Util_constructClock(&clkPeriodic, multi_role_clockHandler,
-    MR_PERIODIC_EVT_PERIOD,
-                        0, false, (UArg) &periodicUpdateData);
+
+    Util_constructClock(&clkJuxta1Hz, multi_role_clockHandler, JUXTA_1HZ_PERIOD,
+    JUXTA_1HZ_PERIOD,
+                        true, (UArg) &argJuxta1Hz);
 
     Util_constructClock(&clkJuxtaLEDTimeout, multi_role_clockHandler,
     JUXTA_LED_TIMEOUT_PERIOD,
@@ -1076,8 +1283,6 @@ static void multi_role_processGapMsg(gapEventHdr_t *pMsg)
 
         connList[connIndex].charHandle = 0;
 
-        Util_startClock(&clkPeriodic);
-
         pStrAddr = (uint8_t*) Util_convertBdAddr2Str(connList[connIndex].addr);
 
 //      Display_printf(dispHandle, MR_ROW_NON_CONN, 0, "Connected to %s", pStrAddr);
@@ -1123,8 +1328,6 @@ static void multi_role_processGapMsg(gapEventHdr_t *pMsg)
         // If no active connections
         if (numConn == 0)
         {
-            // Stop periodic clock
-            Util_stopClock(&clkPeriodic);
         }
 
         break;
@@ -1518,7 +1721,8 @@ static void multi_role_processAppMsg(mrEvt_t *pMsg)
         if (multi_role_findSvcUuid(SIMPLEPROFILE_SERV_UUID, pAdvRpt->pData,
                                    pAdvRpt->dataLen))
         {
-            multi_role_addScanInfo(pAdvRpt->addr, pAdvRpt->addrType);
+            multi_role_addScanInfo(pAdvRpt->addr, pAdvRpt->addrType,
+                                   pAdvRpt->rssi);
 //        Display_printf(dispHandle, MR_ROW_CUR_CONN, 0, "Discovered: %s",
 //                       Util_convertBdAddr2Str(pAdvRpt->addr));
         }
@@ -1536,9 +1740,9 @@ static void multi_role_processAppMsg(mrEvt_t *pMsg)
                     memcpy(newTime, pAdvRpt->pData + svcLoc + 4,
                            sizeof(newTime));
                     localTime = strtol((char*) newTime, NULL, 16);
-                    blink(true);
-                    blink(true);
-                    blink(true);
+                    blink(1);
+                    blink(1);
+                    blink(1);
                     break;
                 }
             }
@@ -1646,15 +1850,15 @@ static void multi_role_processAppMsg(mrEvt_t *pMsg)
         break;
     }
 
-    case MR_EVT_PERIODIC:
-    {
-        multi_role_performPeriodicTask();
-        break;
-    }
-
     case MR_EVT_READ_RPA:
     {
         multi_role_updateRPA();
+        break;
+    }
+
+    case JUXTA_EVT_1HZ:
+    {
+        juxta1HzTask();
         break;
     }
 
@@ -1829,7 +2033,8 @@ static bool multi_role_findSvcUuid(uint16_t uuid, uint8_t *pData,
  *
  * @return  none
  */
-static void multi_role_addScanInfo(uint8_t *pAddr, uint8_t addrType)
+static void multi_role_addScanInfo(uint8_t *pAddr, uint8_t addrType,
+                                   int8_t rssi)
 {
     uint8_t i;
 
@@ -1848,6 +2053,7 @@ static void multi_role_addScanInfo(uint8_t *pAddr, uint8_t addrType)
         // Add addr to scan result list
         memcpy(scanList[numScanRes].addr, pAddr, B_ADDR_LEN);
         scanList[numScanRes].addrType = addrType;
+        scanList[numScanRes].rssi = rssi;
 
         // Increment scan result count
         numScanRes++;
@@ -1965,40 +2171,53 @@ static status_t multi_role_enqueueMsg(uint8_t event, void *pData)
  */
 static void multi_role_processCharValueChangeEvt(uint8_t paramId)
 {
-    uint8_t newValue;
+    uint8_t len;
+    bStatus_t retProfile;
 
     switch (paramId)
     {
     case SIMPLEPROFILE_CHAR1:
-        SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, &newValue);
-
-//      Display_printf(dispHandle, MR_ROW_CHARSTAT, 0, "Char 1: %d", (uint16_t)newValue);
+        len = SIMPLEPROFILE_CHAR1_LEN;
         break;
-
+    case SIMPLEPROFILE_CHAR2:
+        len = SIMPLEPROFILE_CHAR2_LEN;
+        break;
     case SIMPLEPROFILE_CHAR3:
-        SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR3, &newValue);
+        len = sizeof(uint8_t);
+        break;
+    default:
+        break;
+    }
 
-//      Display_printf(dispHandle, MR_ROW_CHARSTAT, 0, "Char 3: %d", (uint16_t)newValue);
+    uint8_t *pValue = ICall_malloc(len); // dynamic allocation
+
+    switch (paramId)
+    {
+// only characteristics with GATT_PROP_WRITE, all others are written elsewhere
+    case SIMPLEPROFILE_CHAR1:
+        retProfile = SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, pValue);
+        memcpy(&logCount, pValue, sizeof(uint32_t)); // these should come in MSB from iOS app
+        logCount = rev32(logCount);
+        saveConfigs(); // write log count
+        break;
+    case SIMPLEPROFILE_CHAR2:
+        retProfile = SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR2, pValue);
+        memcpy(&localTime, pValue, sizeof(uint32_t)); // this needs to be reversed, comes MSB from iOS
+        localTime = rev32(localTime);
+        break;
+    case SIMPLEPROFILE_CHAR3:
+        retProfile = SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR3, pValue);
+        modeCallback(pValue[0]);
         break;
 
     default:
-        // should not reach here!
+// should not reach here!
         break;
     }
-}
-
-/*********************************************************************
- * @fn      multi_role_performPeriodicTask
- *
- * @brief   Now used for Juxta
- *
- * @param   None.
- *
- * @return  None.
- */
-static void multi_role_performPeriodicTask(void)
-{
-    GPIO_toggle(LED1);
+    if (retProfile)
+    {
+        ICall_free(pValue);
+    }
 }
 
 /*********************************************************************
@@ -2040,15 +2259,7 @@ static void multi_role_clockHandler(UArg arg)
 {
     mrClockEventData_t *pData = (mrClockEventData_t*) arg;
 
-    if (pData->event == MR_EVT_PERIODIC)
-    {
-        // Start the next period
-        Util_startClock(&clkPeriodic);
-
-        // Send message to perform periodic task
-        multi_role_enqueueMsg(MR_EVT_PERIODIC, NULL);
-    }
-    else if (pData->event == MR_EVT_READ_RPA)
+    if (pData->event == MR_EVT_READ_RPA)
     {
         // Start the next period
         Util_startClock(&clkRpaRead);
@@ -2060,6 +2271,14 @@ static void multi_role_clockHandler(UArg arg)
     {
         // Send message to app
         multi_role_enqueueMsg(MR_EVT_SEND_PARAM_UPDATE, pData);
+    }
+    else if (pData->event == JUXTA_EVT_1HZ)
+    {
+        multi_role_enqueueMsg(JUXTA_EVT_1HZ, NULL);
+    }
+    else if (pData->event == JUXTA_EVT_LED_TIMEOUT)
+    {
+        multi_role_enqueueMsg(JUXTA_EVT_LED_TIMEOUT, NULL);
     }
 }
 

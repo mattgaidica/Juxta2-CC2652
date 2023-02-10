@@ -32,6 +32,7 @@ const GPIO9        = GPIO.addInstance();
 const NVS          = scripting.addModule("/ti/drivers/NVS");
 const NVS1         = NVS.addInstance();
 const NVS2         = NVS.addInstance();
+const NVS3         = NVS.addInstance();
 const Power        = scripting.addModule("/ti/drivers/Power");
 const RF           = scripting.addModule("/ti/drivers/RF");
 const SPI          = scripting.addModule("/ti/drivers/SPI", {}, false);
@@ -137,9 +138,14 @@ NVS1.internalFlash.$name      = "ti_drivers_nvs_NVSCC26XX0";
 NVS1.internalFlash.regionBase = 0x48000;
 NVS1.internalFlash.regionSize = 0x4000;
 
-NVS2.$name                    = "NVS_JUXTA";
+NVS2.$name                    = "NVS_JUXTA_DATA";
 NVS2.internalFlash.$name      = "ti_drivers_nvs_NVSCC26XX1";
 NVS2.internalFlash.regionBase = 0x10000;
+NVS2.internalFlash.regionSize = 0x16000;
+
+NVS3.$name                    = "NVS_JUXTA_CONFIG";
+NVS3.internalFlash.$name      = "ti_drivers_nvs_NVSCC26XX2";
+NVS3.internalFlash.regionBase = 0x26000;
 
 SPI1.$name                    = "SPI_MEM";
 SPI1.mode                     = "Four Pin SS Active Low";
