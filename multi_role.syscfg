@@ -98,9 +98,9 @@ AESECB1.$name = "CONFIG_AESECB0";
 
 ECDH1.$name = "CONFIG_ECDH0";
 
-GPIO1.$name           = "LED1";
 GPIO1.mode            = "Output";
 GPIO1.outputStrength  = "Low";
+GPIO1.$name           = "LED1";
 GPIO1.gpioPin.$assign = "DIO_22";
 
 GPIO2.$name           = "LED2";

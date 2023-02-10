@@ -31,6 +31,11 @@
 			<locationURI>COM_TI_SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR/source/ti/boards/LP_CC2652R7/Board.html</locationURI>
 		</link>
 		<link>
+			<name>LSM303AGR</name>
+			<type>2</type>
+			<locationURI>PARENT-2-PROJECT_LOC/ESLO-Libraries/LSM303AGR</locationURI>
+		</link>
+		<link>
 			<name>Application/util.c</name>
 			<type>1</type>
 			<locationURI>COM_TI_SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR/source/ti/ble5stack/common/cc26xx/util.c</locationURI>
