@@ -49,6 +49,7 @@ const Event        = scripting.addModule("/ti/sysbios/knl/Event");
 const Idle         = scripting.addModule("/ti/sysbios/knl/Idle", {}, false);
 const Idle2        = Idle.addInstance();
 const Mailbox      = scripting.addModule("/ti/sysbios/knl/Mailbox");
+const Task         = scripting.addModule("/ti/sysbios/knl/Task");
 const Error        = scripting.addModule("/ti/sysbios/runtime/Error");
 const SysCallback  = scripting.addModule("/ti/sysbios/runtime/SysCallback");
 const Timestamp    = scripting.addModule("/ti/sysbios/runtime/Timestamp");
@@ -192,10 +193,9 @@ Semaphore.supportsPriority = false;
 const Swi         = scripting.addModule("/ti/sysbios/knl/Swi", {}, false);
 Swi.numPriorities = 6;
 
-const Task             = scripting.addModule("/ti/sysbios/knl/Task", {}, false);
-Task.defaultStackSize  = 512;
 Task.idleTaskStackSize = 768;
 Task.numPriorities     = 6;
+Task.defaultStackSize  = 512;
 
 Error.policy       = "Error_SPIN";
 Error.printDetails = false;

@@ -85,6 +85,7 @@
 #define LSM303AGR_BOOT_TIME             5 // ms
 #define SPI_HALF_PERIOD                 1 // us, Fs = 500kHz
 #define JUXTA_1HZ_PERIOD                1000 // ms
+#define doAxy 0
 
 // Internal Events for RTOS application
 #define MR_ICALL_EVT                         ICALL_MSG_EVENT_ID // Event_Id_31
@@ -750,13 +751,17 @@ static void saveConfigs(void)
 static void juxta1HzTask()
 {
     GPIO_toggle(LED1);
-    setXL();
-    setMag();
-    setTemp();
+    if (doAxy)
+    {
+        setXL();
+        setMag();
+        setTemp();
+    }
     localTime += 1;
 }
 
-static void modeCallback(uint8_t newMode) {
+static void modeCallback(uint8_t newMode)
+{
 
 }
 
@@ -825,56 +830,60 @@ static void multi_role_init(void)
     NVS_init();
     recallNVS();
 
-    SPI_init();
-    dev_ctx_xl.write_reg = platform_write;
-    dev_ctx_xl.read_reg = platform_read;
-    dev_ctx_xl.handle = (void*) &xl_bus;
-    dev_ctx_mg.write_reg = platform_write;
-    dev_ctx_mg.read_reg = platform_read;
-    dev_ctx_mg.handle = (void*) &mag_bus;
-    /* Wait sensor boot time */
-    platform_delay(LSM303AGR_BOOT_TIME);
-    /* Check device ID */
-    whoamI = 0;
-    lsm303agr_xl_device_id_get(&dev_ctx_xl, &whoamI);
-    if (whoamI != LSM303AGR_ID_XL)
+    if (doAxy)
     {
-        blink(0); // not found
-    }
-    whoamI = 0;
-    lsm303agr_mag_device_id_get(&dev_ctx_mg, &whoamI);
+        SPI_init();
+        dev_ctx_xl.write_reg = platform_write;
+        dev_ctx_xl.read_reg = platform_read;
+        dev_ctx_xl.handle = (void*) &xl_bus;
+        dev_ctx_mg.write_reg = platform_write;
+        dev_ctx_mg.read_reg = platform_read;
+        dev_ctx_mg.handle = (void*) &mag_bus;
+        /* Wait sensor boot time */
+        platform_delay(LSM303AGR_BOOT_TIME);
+        /* Check device ID */
+        whoamI = 0;
+        lsm303agr_xl_device_id_get(&dev_ctx_xl, &whoamI);
+        if (whoamI != LSM303AGR_ID_XL)
+        {
+            blink(0); // not found
+        }
+        whoamI = 0;
+        lsm303agr_mag_device_id_get(&dev_ctx_mg, &whoamI);
 
-    if (whoamI != LSM303AGR_ID_MG)
-    {
-        blink(0); // not found
-    }
-    /* Restore default configuration for magnetometer */
-    lsm303agr_mag_reset_set(&dev_ctx_mg, PROPERTY_ENABLE);
-    do
-    {
-        lsm303agr_mag_reset_get(&dev_ctx_mg, &rst);
-    }
-    while (rst);
+        if (whoamI != LSM303AGR_ID_MG)
+        {
+            blink(0); // not found
+        }
+        /* Restore default configuration for magnetometer */
+        lsm303agr_mag_reset_set(&dev_ctx_mg, PROPERTY_ENABLE);
+        do
+        {
+            lsm303agr_mag_reset_get(&dev_ctx_mg, &rst);
+        }
+        while (rst);
 
-    /* Enable Block Data Update */
-    lsm303agr_xl_block_data_update_set(&dev_ctx_xl, PROPERTY_ENABLE);
-    lsm303agr_mag_block_data_update_set(&dev_ctx_mg, PROPERTY_ENABLE);
-    /* Set Output Data Rate */
-    lsm303agr_xl_data_rate_set(&dev_ctx_xl, LSM303AGR_XL_ODR_1Hz);
-    lsm303agr_mag_data_rate_set(&dev_ctx_mg, LSM303AGR_MG_ODR_10Hz);
-    /* Set accelerometer full scale */
-    lsm303agr_xl_full_scale_set(&dev_ctx_xl, LSM303AGR_2g);
-    /* Set / Reset magnetic sensor mode */
-    lsm303agr_mag_set_rst_mode_set(&dev_ctx_mg,
-                                   LSM303AGR_SENS_OFF_CANC_EVERY_ODR);
-    /* Enable temperature compensation on mag sensor */
-    lsm303agr_mag_offset_temp_comp_set(&dev_ctx_mg, PROPERTY_ENABLE);
-    /* Enable temperature sensor */
-    lsm303agr_temperature_meas_set(&dev_ctx_xl, LSM303AGR_TEMP_ENABLE);
-    /* Set device in continuous mode */
-    lsm303agr_xl_operating_mode_set(&dev_ctx_xl, LSM303AGR_HR_12bit);
-    /* Set magnetometer in continuous mode */
-    lsm303agr_mag_operating_mode_set(&dev_ctx_mg, LSM303AGR_CONTINUOUS_MODE);
+        /* Enable Block Data Update */
+        lsm303agr_xl_block_data_update_set(&dev_ctx_xl, PROPERTY_ENABLE);
+        lsm303agr_mag_block_data_update_set(&dev_ctx_mg, PROPERTY_ENABLE);
+        /* Set Output Data Rate */
+        lsm303agr_xl_data_rate_set(&dev_ctx_xl, LSM303AGR_XL_ODR_1Hz);
+        lsm303agr_mag_data_rate_set(&dev_ctx_mg, LSM303AGR_MG_ODR_10Hz);
+        /* Set accelerometer full scale */
+        lsm303agr_xl_full_scale_set(&dev_ctx_xl, LSM303AGR_2g);
+        /* Set / Reset magnetic sensor mode */
+        lsm303agr_mag_set_rst_mode_set(&dev_ctx_mg,
+                                       LSM303AGR_SENS_OFF_CANC_EVERY_ODR);
+        /* Enable temperature compensation on mag sensor */
+        lsm303agr_mag_offset_temp_comp_set(&dev_ctx_mg, PROPERTY_ENABLE);
+        /* Enable temperature sensor */
+        lsm303agr_temperature_meas_set(&dev_ctx_xl, LSM303AGR_TEMP_ENABLE);
+        /* Set device in continuous mode */
+        lsm303agr_xl_operating_mode_set(&dev_ctx_xl, LSM303AGR_HR_12bit);
+        /* Set magnetometer in continuous mode */
+        lsm303agr_mag_operating_mode_set(&dev_ctx_mg,
+                                         LSM303AGR_CONTINUOUS_MODE);
+    }
 
 //    modeCallback(juxtaMode); // resets sniff for JUXTA_MODE_AXY_LOGGER, stops sniff for others
 
@@ -891,13 +900,13 @@ static void multi_role_init(void)
     // Create an RTOS queue for message from profile to be sent to app.
     appMsgQueue = Util_constructQueue(&appMsg);
 
-    Util_constructClock(&clkJuxta1Hz, multi_role_clockHandler, JUXTA_1HZ_PERIOD,
-    JUXTA_1HZ_PERIOD,
-                        true, (UArg) &argJuxta1Hz);
-
-    Util_constructClock(&clkJuxtaLEDTimeout, multi_role_clockHandler,
-    JUXTA_LED_TIMEOUT_PERIOD,
-                        0, false, (UArg) &argJuxtaLEDTimeout);
+//    Util_constructClock(&clkJuxta1Hz, multi_role_clockHandler, JUXTA_1HZ_PERIOD,
+//    JUXTA_1HZ_PERIOD,
+//                        true, (UArg) &argJuxta1Hz);
+//
+//    Util_constructClock(&clkJuxtaLEDTimeout, multi_role_clockHandler,
+//    JUXTA_LED_TIMEOUT_PERIOD,
+//                        0, false, (UArg) &argJuxtaLEDTimeout);
 
     // Initialize Connection List
     multi_role_clearConnListEntry(LINKDB_CONNHANDLE_ALL);
